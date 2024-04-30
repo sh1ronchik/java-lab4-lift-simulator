@@ -1,37 +1,69 @@
 import java.util.*;
 
+/**
+ * Represents a building with an elevator system, managing the movement of elevators and passengers.
+ */
 public class Building {
-    private final int maxFloor;
-    private final int minFloor = 1;
-    private final List<Call> queuePassengers = new ArrayList<>();
-    private final Elevator elevator1 = new Elevator(1);
-    private final Elevator elevator2 = new Elevator(2);
+    int maxFloor;
+    int minFloor;
+    List<Call> queuePassengers = new ArrayList<>();
+    final Elevator elevator1 = new Elevator(1);
+    final Elevator elevator2 = new Elevator(2);
 
+    /**
+     * Constructs a new Building with the specified maximum number of floors.
+     * Initializes the building with a minimum floor of 1 and the specified maximum floor.
+     *
+     * @param maxFloor the maximum number of floors in the building
+     */
     public Building(int maxFloor) {
+        minFloor = 1;
         this.maxFloor = maxFloor;
     }
 
+    /**
+     * Adds a passenger call to the queue. This method is thread-safe and synchronized.
+     * It adds a call to the queue and prints a message indicating the passenger's wait status.
+     *
+     * @param call the call to be added to the queue
+     */
     public synchronized void addPassengersInQueue(Call call) {
         queuePassengers.add(call);
         System.out.printf("Passenger №%d is waiting on floor №%d%n", call.getId(), call.getCurrentFloor());
     }
 
+    /**
+     * Updates the position of the first elevator by calling the step method with the first elevator and the second elevator as parameters.
+     */
     public void run1() {
         step(elevator1, elevator2);
     }
 
+    /**
+     * Updates the position of the second elevator by calling the step method with the second elevator and the first elevator as parameters.
+     */
     public void run2() {
         step(elevator2, elevator1);
     }
 
+    /**
+     * Moves the specified elevator. This method is responsible for the elevator's movement logic, including handling passenger calls and direction changes.
+     * It is synchronized to ensure thread safety during concurrent operations.
+     *
+     * @param elevator the elevator to move
+     * @param another the elevator that will not move, used for comparison to determine the best elevator for a call
+     */
     private synchronized void step(Elevator elevator, Elevator another) {
-        System.out.printf("Elevator №%d is now on the floor №%d %n", elevator.getId(), elevator.getCurrentFloor());
+        System.out.printf("Elevator №%d is currently on floor №%d %n", elevator.getId(), elevator.getCurrentFloor());
+
         Out(elevator);
         updateQueue(elevator);
         InElevator(elevator);
 
-        if (elevator.getDirectionCurrent() == another.getDirectionCurrent() && another.getDirectionCurrent() == Direction.STOP && !queuePassengers.isEmpty()) {
-            if (Math.abs(another.getCurrentFloor() - queuePassengers.get(0).getCurrentFloor()) < Math.abs(elevator.getCurrentFloor() - queuePassengers.get(0).getCurrentFloor())) {
+        if (elevator.getDirectionCurrent() == another.getDirectionCurrent() && another.getDirectionCurrent() == Direction.STOP
+                && !queuePassengers.isEmpty()) {
+            if (Math.abs(another.getCurrentFloor() - queuePassengers.get(0).getCurrentFloor())
+                    < Math.abs(elevator.getCurrentFloor() - queuePassengers.get(0).getCurrentFloor())) {
                 return;
             }
         }
@@ -40,58 +72,113 @@ public class Building {
             Call call = queuePassengers.remove(0);
             elevator.setTargetFloor(call.getCurrentFloor());
 
-            elevator.getQueuePassengers().computeIfAbsent(call.getCurrentFloor(), k -> new ArrayList<>()).add(call);
+            if (!elevator.getQueuePassengers().containsKey(call.getCurrentFloor())) {
+                elevator.getQueuePassengers().put(call.getCurrentFloor(), new ArrayList<>());
+            }
+            elevator.getQueuePassengers().get(call.getCurrentFloor()).add(call);
 
-            elevator.setDirectionCurrent(call.getCurrentFloor() > elevator.getCurrentFloor() ? Direction.UP : Direction.DOWN);
+            if (call.getCurrentFloor() > elevator.getCurrentFloor()) elevator.setDirectionCurrent(Direction.UP);
+            else elevator.setDirectionCurrent(Direction.DOWN);
+
             elevator.setDirectionTarget(call.getDirection());
 
             updateQueue(elevator);
             InElevator(elevator);
         }
 
-        if (elevator.getDirectionCurrent() != Direction.STOP) {
-            elevator.setCurrentFloor(elevator.getDirectionCurrent() == Direction.UP && elevator.getCurrentFloor() + 1 <= maxFloor ? elevator.getCurrentFloor() + 1 :
-                    elevator.getDirectionCurrent() == Direction.DOWN && elevator.getCurrentFloor() - 1 >= minFloor ? elevator.getCurrentFloor() - 1 : elevator.getCurrentFloor());
+        if (elevator.getDirectionCurrent() == Direction.STOP) return;
+
+        if (elevator.getDirectionCurrent() == Direction.UP && elevator.getCurrentFloor() + 1 <= maxFloor) {
+            elevator.incrementFloor();
+        }
+        if (elevator.getDirectionCurrent() == Direction.DOWN && elevator.getCurrentFloor() - 1 >= minFloor) {
+            elevator.decrementFloor();
         }
     }
 
+    /**
+     * Adds suitable calls to the elevator's queue based on the elevator's current direction and target direction.
+     * This method updates the elevator's queue with calls that match its direction, ensuring efficient movement.
+     *
+     * @param elevator the elevator currently moving, whose queue is to be updated
+     */
     private void updateQueue(Elevator elevator) {
         if (elevator.getDirectionCurrent() == Direction.STOP) return;
 
         if (elevator.getDirectionCurrent() == elevator.getDirectionTarget()) {
-            queuePassengers.removeIf(call -> {
-                if (call.getDirection() == elevator.getDirectionCurrent() &&
-                        ((call.getCurrentFloor() <= elevator.getCurrentFloor() && elevator.getDirectionCurrent() == Direction.DOWN) ||
-                                (call.getCurrentFloor() >= elevator.getCurrentFloor() && elevator.getDirectionCurrent() == Direction.UP))) {
-                    elevator.getQueuePassengers().computeIfAbsent(call.getCurrentFloor(), k -> new ArrayList<>()).add(call);
-                    return true;
+            Iterator<Call> iterator = queuePassengers.iterator();
+            while (iterator.hasNext()) {
+                Call call = iterator.next();
+                if (call.getDirection() == elevator.getDirectionCurrent()) {
+                    if (call.getCurrentFloor() <= elevator.getCurrentFloor() && elevator.getDirectionCurrent() == Direction.DOWN
+                            || call.getCurrentFloor() >= elevator.getCurrentFloor() && elevator.getDirectionCurrent() == Direction.UP) {
+
+                        if (!elevator.getQueuePassengers().containsKey(call.getCurrentFloor())) {
+                            elevator.getQueuePassengers().put(call.getCurrentFloor(), new ArrayList<>());
+                        }
+
+                        elevator.getQueuePassengers().get(call.getCurrentFloor()).add(call);
+                        iterator.remove();
+                    }
                 }
-                return false;
-            });
+            }
         }
     }
 
+    /**
+     * Handles passengers entering the elevator. This method checks if there are any passengers on the current floor who are waiting to enter the elevator.
+     * It adds these passengers to the elevator's passenger list and updates the elevator's direction based on the passengers' target floors.
+     *
+     * @param elevator the elevator currently moving, to which passengers may enter
+     */
     private void InElevator(Elevator elevator) {
         if (elevator.getDirectionCurrent() == Direction.STOP) return;
 
-        elevator.getQueuePassengers().getOrDefault(elevator.getCurrentFloor(), new ArrayList<>()).removeIf(call -> {
+        if (!elevator.getQueuePassengers().containsKey(elevator.getCurrentFloor())) {
+            elevator.getQueuePassengers().put(elevator.getCurrentFloor(), new ArrayList<>());
+        }
+
+        Iterator<Call> iterator = elevator.getQueuePassengers().get(elevator.getCurrentFloor()).iterator();
+        while (iterator.hasNext()) {
+            Call call = iterator.next();
             elevator.getPassengersInElevator().put(call.getId(), call.getTargetFloor());
-            elevator.setDirectionCurrent(call.getTargetFloor() > elevator.getCurrentFloor() ? Direction.UP : Direction.DOWN);
-            System.out.printf("Passenger №%d went into the lift №%d on the floor №%d and goes to the floor №%d%n", call.getId(), elevator.getId(), call.getCurrentFloor(), call.getTargetFloor());
-            return true;
-        });
+            elevator.setDirectionCurrent(call.getDirection());
+
+            if (elevator.getTargetFloor() < call.getTargetFloor() && elevator.getDirectionCurrent() == Direction.UP) {
+                elevator.setTargetFloor(call.getTargetFloor());
+            }
+            if (elevator.getTargetFloor() > call.getTargetFloor() && elevator.getDirectionCurrent() == Direction.DOWN) {
+                elevator.setTargetFloor(call.getTargetFloor());
+            }
+
+            System.out.printf("Passenger №%d entered elevator №%d on floor №%d and is going to floor №%d%n",
+                    call.getId(), elevator.getId(), call.getCurrentFloor(), call.getTargetFloor());
+            iterator.remove();
+        }
+        if (elevator.getQueuePassengers().get(elevator.getCurrentFloor()).isEmpty()) {
+            elevator.getQueuePassengers().remove(elevator.getCurrentFloor());
+        }
     }
 
+    /**
+     * Handles passengers exiting the elevator. This method checks if any passengers in the elevator have reached their target floor.
+     * It removes these passengers from the elevator and prints a message indicating their exit.
+     *
+     * @param elevator the elevator currently moving, from which passengers may exit
+     */
     private void Out(Elevator elevator) {
         if (elevator.getDirectionCurrent() == Direction.STOP) return;
 
-        elevator.getPassengersInElevator().entrySet().removeIf(entry -> {
+        List<Integer> keysForRemove = new ArrayList<>();
+        for (Map.Entry<Integer, Integer> entry : elevator.getPassengersInElevator().entrySet()) {
             if (entry.getValue() == elevator.getCurrentFloor()) {
-                System.out.printf("Passenger №%d got out of the lift №%d on the floor №%d%n", entry.getKey(), elevator.getId(), entry.getValue());
-                return true;
+                System.out.printf("Passenger №%d exited elevator №%d on floor №%d%n",
+                        entry.getKey(), elevator.getId(), entry.getValue());
+                keysForRemove.add(entry.getKey());
             }
-            return false;
-        });
+        }
+
+        keysForRemove.forEach(i -> elevator.getPassengersInElevator().remove(i));
 
         if (elevator.getPassengersInElevator().isEmpty() && elevator.getQueuePassengers().isEmpty()) {
             elevator.setDirectionCurrent(Direction.STOP);
