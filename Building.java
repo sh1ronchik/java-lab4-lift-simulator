@@ -4,11 +4,11 @@ import java.util.*;
  * Represents a building with an elevator system, managing the movement of elevators and passengers.
  */
 public class Building {
-    int maxFloor;
-    int minFloor;
-    List<Call> queuePassengers = new ArrayList<>();
-    final Elevator elevator1 = new Elevator(1);
-    final Elevator elevator2 = new Elevator(2);
+    private int maxFloor;
+    private int minFloor;
+    private List<Call> queuePassengers = new ArrayList<>();
+    private final Elevator elevator1 = new Elevator(1);
+    private final Elevator elevator2 = new Elevator(2);
 
     /**
      * Constructs a new Building with the specified maximum number of floors.
@@ -54,12 +54,59 @@ public class Building {
      * @param another the elevator that will not move, used for comparison to determine the best elevator for a call
      */
     private synchronized void step(Elevator elevator, Elevator another) {
+        printElevatorStatus(elevator);
+        handlePassengerExit(elevator);
+        updateElevatorQueue(elevator);
+        handlePassengerEntry(elevator);
+        decideElevatorMovement(elevator, another);
+        moveElevator(elevator);
+    }
+
+    /**
+     * Prints the current status of the elevator, including its ID and the floor it is currently on.
+     *
+     * @param elevator the elevator whose status is to be printed
+     */
+    private void printElevatorStatus(Elevator elevator) {
         System.out.printf("Elevator №%d is currently on floor №%d %n", elevator.getId(), elevator.getCurrentFloor());
+    }
 
+    /**
+     * Handles the exit of passengers from the elevator. This method checks if any passengers in the elevator
+     * have reached their target floor and removes them from the elevator. .
+     *
+     * @param elevator the elevator from which passengers may exit
+     */
+    private void handlePassengerExit(Elevator elevator) {
         Out(elevator);
-        updateQueue(elevator);
-        InElevator(elevator);
+    }
 
+    /**
+     * Updates the elevator's queue with calls that match its current direction, ensuring efficient movement.
+     *
+     * @param elevator the elevator whose queue is to be updated
+     */
+    private void updateElevatorQueue(Elevator elevator) {
+        updateQueue(elevator);
+    }
+
+    /**
+     * Handles passengers entering the elevator. This method checks if there are any passengers on the current floor
+     * who are waiting to enter the elevator.
+     *
+     * @param elevator the elevator to which passengers may enter
+     */
+    private void handlePassengerEntry(Elevator elevator) {
+        InElevator(elevator);
+    }
+
+    /**
+     * Decides the movement of the elevator based on its current direction, target direction, and the queue of passenger calls.
+     *
+     * @param elevator the elevator whose movement is to be decided
+     * @param another the elevator that will not move, used for comparison to determine the best elevator for a call
+     */
+    private void decideElevatorMovement(Elevator elevator, Elevator another) {
         if (elevator.getDirectionCurrent() == another.getDirectionCurrent() && another.getDirectionCurrent() == Direction.STOP
                 && !queuePassengers.isEmpty()) {
             if (Math.abs(another.getCurrentFloor() - queuePassengers.get(0).getCurrentFloor())
@@ -87,7 +134,16 @@ public class Building {
         }
 
         if (elevator.getDirectionCurrent() == Direction.STOP) return;
+    }
 
+    /**
+     * Moves the specified elevator in the direction it is currently set to move. This method increments or decrements
+     * the elevator's current floor based on its direction, ensuring it does not move beyond the building's
+     * minimum or maximum floors.
+     *
+     * @param elevator the elevator to move
+     */
+    private void moveElevator(Elevator elevator) {
         if (elevator.getDirectionCurrent() == Direction.UP && elevator.getCurrentFloor() + 1 <= maxFloor) {
             elevator.incrementFloor();
         }
